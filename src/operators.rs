@@ -1,3 +1,5 @@
+use core::slice;
+
 use crate::tensor::Tensor;
 
 // get (row) vectors from a 2D table given a list of indices
@@ -71,7 +73,24 @@ pub fn masked_softmax(y: &mut Tensor<f32>) {
 }
 
 pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: f32) {
-    todo!("实现 rms_norm，计算前做一些必要的检查会帮助你后续调试")
+    let len = y.size();
+    assert!(len == x.size());
+    for start in (0..y.size()).step_by(w.size()) {
+        println!("start = {start}");
+        let mut y_slice = y.slice(start, w.shape());
+        let x_slice = x.slice(start, w.shape());
+        let _y = unsafe { y_slice.data_mut() };
+        let _x = x_slice.data();
+        let _w = w.data();
+
+        let rms = (_x.iter().map(|&v| v * v).sum::<f32>() / _x.len() as f32 + epsilon).sqrt();
+        let mut y_iter = _y.iter_mut();
+        for (&x_ij, &w_j) in _x.iter().zip(_w.iter()) {
+            let y_i = y_iter.next().unwrap();
+            println!("x_ij = {} w_j = {}", x_ij, w_j);
+            *y_i = (x_ij / rms) * w_j;
+        }
+    }
 }
 
 // y = silu(x) * y
@@ -83,9 +102,9 @@ pub fn swiglu(y: &mut Tensor<f32>, x: &Tensor<f32>) {
     let _y = unsafe { y.data_mut() };
     let _x = x.data();
 
-    for (num_y, num_x) in _y.iter_mut().zip(_x.iter()) {
+    for (mut_num_y, num_x) in _y.iter_mut().zip(_x.iter()) {
         let silu_x = num_x * (1. / (1. + (-num_x).exp()));
-        *num_y *= silu_x;
+        *mut_num_y *= silu_x;
     }
 }
 
@@ -193,6 +212,7 @@ fn test_rms_norm() {
     let x = Tensor::<f32>::new(vec![1., 2., 3., 4.], &vec![2, 2]);
     let w = Tensor::<f32>::new(vec![1., 2.], &vec![2]);
     rms_norm(&mut y, &x, &w, 1e-6);
+    y.print();
     assert!(y.close_to(
         &Tensor::<f32>::new(
             vec![0.6324554, 2.5298216, 0.8485281, 2.2627416],
