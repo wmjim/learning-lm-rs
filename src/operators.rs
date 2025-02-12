@@ -75,8 +75,12 @@ pub fn masked_softmax(y: &mut Tensor<f32>) {
 pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: f32) {
     let len = y.size();
     assert!(len == x.size());
-    for start in (0..y.size()).step_by(w.size()) {
-        println!("start = {start}");
+    let w_size = w.size();
+    for start in (0..len).step_by(w_size) {
+        if start + w_size > len {
+            break;
+        }
+
         let mut y_slice = y.slice(start, w.shape());
         let x_slice = x.slice(start, w.shape());
         let _y = unsafe { y_slice.data_mut() };
@@ -84,10 +88,7 @@ pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: 
         let _w = w.data();
 
         let rms = (_x.iter().map(|&v| v * v).sum::<f32>() / _x.len() as f32 + epsilon).sqrt();
-        let mut y_iter = _y.iter_mut();
-        for (&x_ij, &w_j) in _x.iter().zip(_w.iter()) {
-            let y_i = y_iter.next().unwrap();
-            println!("x_ij = {} w_j = {}", x_ij, w_j);
+        for (y_i, (&x_ij, &w_j)) in _y.iter_mut().zip(_x.iter().zip(_w.iter())) {
             *y_i = (x_ij / rms) * w_j;
         }
     }
