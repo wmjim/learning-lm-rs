@@ -161,13 +161,20 @@ fn mlp(
     hidden_states: &mut Tensor<f32>,
     gate: &mut Tensor<f32>,
     up: &mut Tensor<f32>,
-    w_up: &Tensor<f32>,
-    w_down: &Tensor<f32>,
-    w_gate: &Tensor<f32>,
+    w_up: &Tensor<f32>, // up_weight
+    w_down: &Tensor<f32>, // down_weight
+    w_gate: &Tensor<f32>, // gate_weight
     rms_w: &Tensor<f32>,
     eps: f32,
 ) {
-    todo!("Implement mlp");
+    let beta = 0 as f32;
+    let betaa = 1_f32;
+    let alpha = 1_f32;
+    OP::rms_norm(hidden_states, residual, rms_w, eps);
+    OP::matmul_transb(gate, beta, hidden_states, w_gate, alpha);
+    OP::matmul_transb(up, beta, hidden_states, w_up, alpha);
+    OP::swiglu(up, gate);
+    OP::matmul_transb(residual, betaa, up, w_down, alpha);
 }
 
 #[test]
