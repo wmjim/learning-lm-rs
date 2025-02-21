@@ -1,9 +1,9 @@
 use std::{slice, sync::Arc, vec};
 pub struct Tensor<T> {
-    data: Arc<Box<[T]>>,
-    shape: Vec<usize>,
-    offset: usize,
-    length: usize,
+    data: Arc<Box<[T]>>,    // 表示一个可以在多个线程间共享的动态数组 
+    shape: Vec<usize>,      // 表示张量的形状
+    offset: usize,          // 表示从 data 数组起始位置开始的偏移量
+    length: usize,          // 表示张量中元素的总数
 }
 
 impl<T: Copy + Clone + Default> Tensor<T> {

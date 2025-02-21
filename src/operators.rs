@@ -94,17 +94,24 @@ pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: 
     }
 }
 
-// y = silu(x) * y
-// hint: this is an element-wise operation
+/// 实现 SwiGLU 激活函数，即 y = silu(x) * y，这是一个逐元素操作
+///
+/// # 参数
+/// - `y`: 可变的 `Tensor<f32>` 引用，用于存储计算结果，会被修改。
+/// - `x`: 不可变的 `Tensor<f32>` 引用，作为输入数据。
 pub fn swiglu(y: &mut Tensor<f32>, x: &Tensor<f32>) {
     let len = y.size();
+    // 断言 y 和 x 张量的元素数量相同，确保 element-wise 操作不会越界
     assert!(len == x.size());
 
+    // 以不安全的方式获取 y 张量数据的可变切片
     let _y = unsafe { y.data_mut() };
     let _x = x.data();
 
     for (mut_num_y, num_x) in _y.iter_mut().zip(_x.iter()) {
+        // 计算 x 元素的 SiLU 激活值
         let silu_x = num_x * (1. / (1. + (-num_x).exp()));
+        // 将 y 元素乘以对应的 SiLU 激活值
         *mut_num_y *= silu_x;
     }
 }
