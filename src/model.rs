@@ -156,6 +156,20 @@ fn self_attention(
     todo!("Implement self_attention");
 }
 
+/// 多层感知机（MLP）前向传播函数
+///
+/// 该函数实现了多层感知机的前向传播过程，包括 RMS 归一化、矩阵乘法、SwiGLU 激活函数和最终的矩阵乘法。
+///
+/// # 参数
+/// - `residual`: 可变的 `Tensor<f32>` 引用，代表残差连接中的输入，会被更新。
+/// - `hidden_states`: 可变的 `Tensor<f32>` 引用，用于存储中间隐藏状态。
+/// - `gate`: 可变的 `Tensor<f32>` 引用，用于存储门控单元的输出。
+/// - `up`: 可变的 `Tensor<f32>` 引用，用于存储上采样后的结果。
+/// - `w_up`: 不可变的 `Tensor<f32>` 引用，代表上采样的权重矩阵。
+/// - `w_down`: 不可变的 `Tensor<f32>` 引用，代表下采样的权重矩阵。
+/// - `w_gate`: 不可变的 `Tensor<f32>` 引用，代表门控单元的权重矩阵。
+/// - `rms_w`: 不可变的 `Tensor<f32>` 引用，代表 RMS 归一化的权重矩阵。
+/// - `eps`: 一个小的浮点数常量，用于避免 RMS 归一化中的除零错误。
 fn mlp(
     residual: &mut Tensor<f32>,
     hidden_states: &mut Tensor<f32>,
@@ -167,13 +181,19 @@ fn mlp(
     rms_w: &Tensor<f32>,
     eps: f32,
 ) {
+    // 初始化常量，用于矩阵乘法函数
     let beta = 0 as f32;
     let betaa = 1_f32;
     let alpha = 1_f32;
+    // 对残差连接的输入进行 RMS 归一化，结果存储在 hidden_states 中
     OP::rms_norm(hidden_states, residual, rms_w, eps);
+    // 计算 hidden_states 与门控权重矩阵的矩阵乘法，结果存储在 gate 中
     OP::matmul_transb(gate, beta, hidden_states, w_gate, alpha);
+    // 计算 hidden_states 与上采样权重矩阵的矩阵乘法，结果存储在 up 中
     OP::matmul_transb(up, beta, hidden_states, w_up, alpha);
+    // 对 up 和 gate 应用 SwiGLU 激活函数，更新 up 的值
     OP::swiglu(up, gate);
+    // 计算 up 与下采样权重矩阵的矩阵乘法，并将结果与残差连接相加，更新 residual 的值
     OP::matmul_transb(residual, betaa, up, w_down, alpha);
 }
 

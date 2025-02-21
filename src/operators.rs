@@ -72,23 +72,41 @@ pub fn masked_softmax(y: &mut Tensor<f32>) {
     }
 }
 
+/// 对输入张量 `x` 执行均方根归一化（RMS Norm）操作，并将结果存储在张量 `y` 中。
+///
+/// 均方根归一化公式为：`y = (x / rms(x)) * w`，其中 `rms(x)` 是 `x` 的均方根值，`w` 是可学习的权重参数。
+///
+/// # 参数
+/// - `y`: 可变的 `Tensor<f32>` 引用，用于存储归一化后的结果。
+/// - `x`: 不可变的 `Tensor<f32>` 引用，作为输入数据。
+/// - `w`: 不可变的 `Tensor<f32>` 引用，作为可学习的权重参数。
+/// - `epsilon`: 一个小的常量，用于避免除零错误。
 pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: f32) {
     let len = y.size();
     assert!(len == x.size());
     let w_size = w.size();
+    // 以 w_size 为步长遍历输入张量 x
     for start in (0..len).step_by(w_size) {
+        // 确保不会越界访问 x 和 y 张量
         if start + w_size > len {
             break;
         }
 
+        // 从 y 张量中切出大小为 w.shape() 的子张量
         let mut y_slice = y.slice(start, w.shape());
+        // 从 x 张量中切出大小为 w.shape() 的子张量
         let x_slice = x.slice(start, w.shape());
+        // 以不安全的方式获取 y_slice 数据的可变切片
         let _y = unsafe { y_slice.data_mut() };
-        let _x = x_slice.data();
+        // 获取 x_slice 数据的不可变切片
+        let _x: &[f32] = x_slice.data();
+        // 获取权重张量 w 数据的不可变切片
         let _w = w.data();
 
+        // 计算 x_slice 中元素的均方根（RMS）值
         let rms = (_x.iter().map(|&v| v * v).sum::<f32>() / _x.len() as f32 + epsilon).sqrt();
         for (y_i, (&x_ij, &w_j)) in _y.iter_mut().zip(_x.iter().zip(_w.iter())) {
+            // 对 x_ij 进行归一化处理，然后乘以权重 w_j，得到归一化后的结果
             *y_i = (x_ij / rms) * w_j;
         }
     }
@@ -116,31 +134,55 @@ pub fn swiglu(y: &mut Tensor<f32>, x: &Tensor<f32>) {
     }
 }
 
-// C = beta * C + alpha * A @ B^T
-// hint: You don't need to do an explicit transpose of B
+/// 执行矩阵乘法 C = beta * C + alpha * A @ B^T，其中 B^T 是 B 的转置
+/// 注意：这里不需要显式地对 B 进行转置操作
+///
+/// # 参数
+/// - `c`: 可变的 `Tensor<f32>` 引用，存储最终结果，会被修改
+/// - `beta`: 浮点数，用于与原矩阵 C 中的元素相乘
+/// - `a`: 不可变的 `Tensor<f32>` 引用，矩阵乘法中的矩阵 A
+/// - `b`: 不可变的 `Tensor<f32>` 引用，矩阵乘法中的矩阵 B
+/// - `alpha`: 浮点数，用于与矩阵乘法结果 A @ B^T 中的元素相乘
 pub fn matmul_transb(c: &mut Tensor<f32>, beta: f32, a: &Tensor<f32>, b: &Tensor<f32>, alpha: f32) {
+    // 获取矩阵 A 的列数，同时也是矩阵 B 的列数
     let step: usize = a.shape()[1];
+    // 确保矩阵 A 和矩阵 B 的列数相同，以保证矩阵乘法可以进行
     assert!(step == b.shape()[1]);
+    // 获取矩阵 A 的元素总数
     let len_a = a.size();
+    // 获取矩阵 B 的元素总数
     let len_b = b.size();
+    // 创建一个空的动态数组，用于存储矩阵乘法 A @ B^T 的结果
     let mut ab = vec![];
+    // 以不安全的方式获取矩阵 C 数据的可变切片，以便后续修改其元素
     let _c = unsafe { c.data_mut() };
+
+    // 外层循环遍历矩阵 A 的每一行
     for start in (0..len_a).step_by(step) {
+        // 确保不会越界访问矩阵 A
         if start + step > len_a {
             break;
         }
+        // 定义切片的形状
         let new_shape = vec![step];
+        // 从矩阵 A 中切出大小为 step 的子张量
         let a_slice = a.slice(start, &new_shape);
-        
+
+        // 内层循环遍历矩阵 B 的每一行
         for start in (0..len_b).step_by(step) { 
+            // 确保不会越界访问矩阵 B
             if start + step > len_b {
                 break;
             }
+            // 从矩阵 B 中切出大小为 step 的子张量
             let b_slice = b.slice(start, &new_shape);
+            // 计算 a_slice 和 b_slice 的点积，并将结果存储在 ab 数组中
             ab.push(dot(&a_slice, &b_slice));
         }
     }
+    // 遍历矩阵 C 的元素和矩阵乘法结果 ab 的元素
     for (c_i, ab_i) in _c.iter_mut().zip(ab.iter()) {
+        // 根据公式 C = beta * C + alpha * A @ B^T 更新矩阵 C 的元素
         *c_i = alpha * ab_i + beta * *c_i;
     }
 }
